@@ -1,0 +1,38 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/sanj_19/project_fy/install/obstacle_avoidance/lib/python3.10/site-packages",
+        "/home/sanj_19/end_game/install/obstacle_avoidance/lib/python3.10/site-packages",
+        "/home/sanj_19/end_game/install/lidar/lib/python3.10/site-packages",
+        "/home/sanj_19/end_game/install/haptic/lib/python3.10/site-packages",
+        "/home/sanj_19/lidar_ws/install/potential_field_nav/lib/python3.10/site-packages",
+        "/home/sanj_19/lidar_ws/install/point_cloud/lib/python3.10/site-packages",
+        "/home/sanj_19/nav_swarm/install/controller/lib/python3.10/site-packages",
+        "/home/sanj_19/turtlebot3_ws/install/turtlebot3_teleop/lib/python3.10/site-packages",
+        "/home/sanj_19/turtlebot3_ws/install/turtlebot3_example/lib/python3.10/site-packages",
+        "/home/sanj_19/turtlebot3_ws/install/turtlebot3_msgs/local/lib/python3.10/dist-packages",
+        "/home/sanj_19/turtlebot3_ws/install/dynamixel_sdk_custom_interfaces/local/lib/python3.10/dist-packages",
+        "/home/sanj_19/swarm/install/robot/lib/python3.10/site-packages",
+        "/home/sanj_19/swarm/install/differential_robot/local/lib/python3.10/dist-packages",
+        "/home/sanj_19/swarm/install/controllers/lib/python3.10/site-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/sanj_19/project_fy/install/obstacle_avoidance/lib/python3.10/site-packages",
+        "/home/sanj_19/end_game/install/obstacle_avoidance/lib/python3.10/site-packages",
+        "/home/sanj_19/end_game/install/lidar/lib/python3.10/site-packages",
+        "/home/sanj_19/end_game/install/haptic/lib/python3.10/site-packages",
+        "/home/sanj_19/lidar_ws/install/potential_field_nav/lib/python3.10/site-packages",
+        "/home/sanj_19/lidar_ws/install/point_cloud/lib/python3.10/site-packages",
+        "/home/sanj_19/nav_swarm/install/controller/lib/python3.10/site-packages",
+        "/home/sanj_19/turtlebot3_ws/install/turtlebot3_teleop/lib/python3.10/site-packages",
+        "/home/sanj_19/turtlebot3_ws/install/turtlebot3_example/lib/python3.10/site-packages",
+        "/home/sanj_19/turtlebot3_ws/install/turtlebot3_msgs/local/lib/python3.10/dist-packages",
+        "/home/sanj_19/turtlebot3_ws/install/dynamixel_sdk_custom_interfaces/local/lib/python3.10/dist-packages",
+        "/home/sanj_19/swarm/install/robot/lib/python3.10/site-packages",
+        "/home/sanj_19/swarm/install/differential_robot/local/lib/python3.10/dist-packages",
+        "/home/sanj_19/swarm/install/controllers/lib/python3.10/site-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ]
+}

@@ -1,0 +1,23 @@
+ekf_filter_node:
+  ros__parameters:
+    frequency: 30.0
+
+    # IMU topic
+    imu0: /imu/data
+    imu0_config: [false, false, false,  # Position (x, y, z)
+                  false, false, false,  # Velocity (x, y, z)
+                  true, true, true,     # Acceleration (x, y, z)
+                  true, true, true,     # Orientation (roll, pitch, yaw)
+                  true, true, true]     # Angular velocity (x, y, z)
+
+    # LIDAR odometry from rf2o
+    odom0: /odom_rf2o
+    odom0_config: [true,  true,  false,  # Position (x, y)
+                   false, false, false,  # Velocity (z)
+                   false, false, false,  # Acceleration (x, y, z)
+                   true,  true,  true,   # Orientation (roll, pitch, yaw)
+                   true,  true,  true]   # Angular velocity (x, y, z)
+
+    two_d_mode: true
+    publish_tf: true
+    transform_time_offset: 0.0
