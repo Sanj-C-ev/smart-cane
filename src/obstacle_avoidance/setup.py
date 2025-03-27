@@ -28,6 +28,7 @@ setup(
             'vfh_v2 = obstacle_avoidance.vfh_v2:main',
             'cmd_vel_nav=obstacle_avoidance.cmd_vel_nav:main',
             'path=obstacle_avoidance.pat:main',
+	    'haptic = obstacle_avoidance.vibrotactile_feedback:main',
         ],
     },
 )
