@@ -1,5 +1,6 @@
 from setuptools import find_packages, setup
-
+import os
+from glob import glob
 package_name = 'mapping_navigation'
 
 setup(
@@ -10,6 +11,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+    (os.path.join('share',package_name,'launch'), glob('launch/*.py')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -24,7 +26,10 @@ setup(
             'slam_node_2 = mapping_navigation.mapping:main',
             'slam_node = mapping_navigation.mapping_costmap:main',
             'goal_publisher = mapping_navigation.goal_publish:main',
-            'navigation_bringup = mapping_navigation.navigation_frontier_dlite:main'
+            'path_planner = mapping_navigation.navigation_frontier_dlite:main',
+            'local_planner=mapping_navigation.local_planner_pure_pursuit:main',
+            'feedback_driver=mapping_navigation.feedback_driver:main',
+            'controller = mapping_navigation.controller:main'
         ],
     },
 )

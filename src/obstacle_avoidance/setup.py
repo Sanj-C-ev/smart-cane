@@ -29,6 +29,7 @@ setup(
             'cmd_vel_nav=obstacle_avoidance.cmd_vel_nav:main',
             'path=obstacle_avoidance.pat:main',
 	    'haptic = obstacle_avoidance.vibrotactile_feedback:main',
+	    'haptic_http_node = obstacle_avoidance.haptic_http_node:main',
         ],
     },
 )

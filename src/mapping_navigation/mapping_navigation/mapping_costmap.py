@@ -9,14 +9,19 @@ import tf_transformations as tf
 import tf2_ros
 import matplotlib.pyplot as plt
 import scipy.ndimage
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 
 
 class MultiSensorSlam(Node):
     def __init__(self):
         super().__init__('multi_sensor_slam')
-
+        ultrasonic_qos = QoSProfile(
+        depth=10,
+        reliability=QoSReliabilityPolicy.BEST_EFFORT  # or RELIABLE
+)
         self.create_subscription(Odometry, '/odom_rf2o', self.odom_callback, 10)
-        self.create_subscription(Float32MultiArray, '/ultrasonic_cluster_1', self.ultrasonic_callback, 10)
+        self.create_subscription(Float32MultiArray, '/sensors/ultrasonic_cluster_1', self.ultrasonic_cluster1_callback, ultrasonic_qos)
+        self.create_subscription(Float32MultiArray, '/sensors/ultrasonic_cluster_2', self.ultrasonic_cluster2_callback, ultrasonic_qos)
         self.create_subscription(LaserScan, '/scan', self.lidar_callback, 10)
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
@@ -30,10 +35,12 @@ class MultiSensorSlam(Node):
         self.ultrasonic_log_grid = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
         self.lidar_log_grid = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
         self.x, self.y, self.yaw = 0.0, 0.0, 0.0
-        self.sensor_distances = [0.5, 0.5, 0.5]
+        self.sensor_distances_cluster1 = [0.5, 0.5, 0.5]  # Existing cluster
+        self.sensor_distances_cluster2 = [0.5]  # New single-sensor cluster
+        self.ultrasonic_arc_points_cluster1 = []
+        self.ultrasonic_arc_points_cluster2 = []
         self.lidar_ranges = []
         self.lidar_angles = []
-        self.ultrasonic_arc_points = []
 
         self.occupancy_grid_publisher = self.create_publisher(OccupancyGrid, '/occupancy_grid', 10)
         self.local_costmap_publisher = self.create_publisher(OccupancyGrid, '/local_costmap', 10)
@@ -53,30 +60,49 @@ class MultiSensorSlam(Node):
         _, _, self.yaw = tf.euler_from_quaternion([q.x, q.y, q.z, q.w])
         self.check_and_shift_map()
 
-    def ultrasonic_callback(self, msg):
+    def ultrasonic_cluster1_callback(self, msg):
         if len(msg.data) == 3:
-            self.sensor_distances = msg.data
-        self.ultrasonic_arc_points = self.generate_ultrasonic_arcs()
+            self.sensor_distances_cluster1 = msg.data
+        self.ultrasonic_arc_points_cluster1 = self.generate_ultrasonic_arcs(
+            sensor_distances=self.sensor_distances_cluster1,
+            cluster_offset_x=0.707,  # Adjust based on physical position
+            cluster_offset_y=0.0,
+            angles=[-np.pi/4, 0, np.pi/4]  # 3 sensors at -45°, 0°, +45°
+        )
+
+    def ultrasonic_cluster2_callback(self, msg):
+        if len(msg.data) == 1:
+            self.sensor_distances_cluster2 = msg.data
+        self.ultrasonic_arc_points_cluster2 = self.generate_ultrasonic_arcs(
+            sensor_distances=self.sensor_distances_cluster2,
+            cluster_offset_x=0.4,  # Different position than cluster1
+            cluster_offset_y=0.0,  # Offset to the side
+            angles=[0]  # Single forward-facing sensor
+        )
 
     def lidar_callback(self, msg):
         self.lidar_ranges = np.array(msg.ranges)
         self.lidar_angles = np.linspace(msg.angle_min, msg.angle_max, len(msg.ranges))
 
-    def generate_ultrasonic_arcs(self):
+    def generate_ultrasonic_arcs(self, sensor_distances, cluster_offset_x, cluster_offset_y, angles):
         arc_points = []
-        angles = [np.pi / 4, 0, -np.pi / 4]
-        arc_half_angle = np.radians(7.5)
-        cluster_x = self.x
-        cluster_y = self.y
-
-        for i, dist in enumerate(self.sensor_distances):
-            if 0.02 < dist < 2.0:
-                sensor_angle = self.yaw - angles[i]
-                arc_res = 10
-                arc_angles = np.linspace(sensor_angle - arc_half_angle, sensor_angle + arc_half_angle, arc_res)
+        beam_width = np.radians(15)  # Typical ultrasonic beam width
+        
+        # Calculate cluster position in world frame
+        cluster_x = self.x + cluster_offset_x * np.cos(self.yaw) - cluster_offset_y * np.sin(self.yaw)
+        cluster_y = self.y + cluster_offset_x * np.sin(self.yaw) + cluster_offset_y * np.cos(self.yaw)
+        
+        for i, dist in enumerate(sensor_distances):
+            if 0.02 < dist < 3.0:  # Valid range
+                sensor_angle = angles[i]
+                # Generate points within the beam arc
+                arc_res = int(beam_width / np.radians(2))  # 2 degree resolution
+                arc_angles = np.linspace(-beam_width/2, beam_width/2, arc_res)
+                
                 for theta in arc_angles:
-                    world_x = cluster_x + dist * np.cos(theta)
-                    world_y = cluster_y + dist * np.sin(theta)
+                    effective_angle = self.yaw + sensor_angle + theta
+                    world_x = cluster_x + dist * np.cos(effective_angle)
+                    world_y = cluster_y + dist * np.sin(effective_angle)
                     arc_points.append((world_x, world_y))
         return arc_points
 
@@ -131,37 +157,12 @@ class MultiSensorSlam(Node):
         self.local_costmap = np.where(distance_map <= inflation_radius_m, inflated_costmap, 0).astype(np.uint8)
 
     def update_maps(self):
-        # Update log-odds maps with current sensor readings
-        self.update_occupancy_grid(self.ultrasonic_arc_points, self.ultrasonic_log_grid, 0.5)
+    # Update with both ultrasonic clusters
+        self.update_occupancy_grid(self.ultrasonic_arc_points_cluster1, self.ultrasonic_log_grid, 0.5)
+        self.update_occupancy_grid(self.ultrasonic_arc_points_cluster2, self.ultrasonic_log_grid, 0.5)
         self.update_occupancy_grid(self.transform_lidar_points(), self.lidar_log_grid, 0.8)
-
-        # Apply exponential smoothing to reduce noise
-        self.smooth_log_grids(alpha=0.6)
-
-        # Fuse smoothed maps into occupancy grid
         self.fuse_maps()
-
-        # Generate inflated local costmap
         self.update_local_costmap()
-
-    def smooth_log_grids(self, alpha=0.6):
-        """
-        Smooth log-odds grids using Exponential Moving Average (EMA).
-        alpha: smoothing factor (0 < alpha < 1), lower = more smoothing
-        """
-        # Store previous values if not initialized
-        if not hasattr(self, 'prev_ultrasonic_log_grid'):
-            self.prev_ultrasonic_log_grid = np.copy(self.ultrasonic_log_grid)
-            self.prev_lidar_log_grid = np.copy(self.lidar_log_grid)
-
-        # Apply EMA
-        self.ultrasonic_log_grid = alpha * self.ultrasonic_log_grid + (1 - alpha) * self.prev_ultrasonic_log_grid
-        self.lidar_log_grid = alpha * self.lidar_log_grid + (1 - alpha) * self.prev_lidar_log_grid
-
-        # Update previous for next iteration
-        self.prev_ultrasonic_log_grid = np.copy(self.ultrasonic_log_grid)
-        self.prev_lidar_log_grid = np.copy(self.lidar_log_grid)
-
 
     def fuse_maps(self):
         ultrasonic_prob = 1 / (1 + np.exp(-self.ultrasonic_log_grid))
@@ -169,6 +170,9 @@ class MultiSensorSlam(Node):
         lidar_prob = 1 / (1 + np.exp(-self.lidar_log_grid))
         fused_prob = np.maximum(ultrasonic_binary, lidar_prob)
         self.occupancy_grid = fused_prob * 100
+        self.render_map(fused_prob)
+
+    
 
     def check_and_shift_map(self):
         threshold = 2.5
@@ -231,10 +235,10 @@ class MultiSensorSlam(Node):
         t.transform.rotation.w = q[3]
         self.tf_broadcaster.sendTransform(t)
 
-    def render_map(self):
+    def render_map(self,p):
         self.ax.cla()
         gx, gy = self.world_to_grid(self.x, self.y)
-        self.ax.imshow(self.occupancy_grid, cmap='gray')
+        self.ax.imshow(1-p*100, cmap='gray',origin='lower')
         self.ax.plot(gx, gy, marker='x', color='r')
         plt.draw()
         plt.pause(0.001)

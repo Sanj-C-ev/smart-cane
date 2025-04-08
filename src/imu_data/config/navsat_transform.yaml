@@ -1,0 +1,9 @@
+# navsat_transform.yaml
+navsat_transform_node:
+  ros__parameters:
+    frequency: 10.0
+    delay: 0.0
+    magnetic_declination_radians: 0.0    # Set your local declination
+    zero_altitude: true                  # Assume ground plane
+    broadcast_utm_transform: false       # Disable if not using UTM
+    wait_for_datum: false                # Auto-start

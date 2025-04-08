@@ -9,19 +9,32 @@ class CustomNavigation(Node):
     def __init__(self):
         super().__init__('custom_navigation')
         
+        # Subscribers
         self.create_subscription(OccupancyGrid, '/occupancy_grid', self.map_callback, 10)
-        self.goal_publisher = self.create_publisher(PoseStamped, '/robot_goal', 10)
-        self.path_publisher = self.create_publisher(Path, '/robot_path', 10)
         self.create_subscription(OccupancyGrid, '/local_costmap', self.costmap_callback, 10)
+        self.create_subscription(PoseStamped, '/next_waypoint', self.waypoint_callback, 10)
+        self.create_subscription(PoseStamped, '/smart_cane_pose', self.pose_callback, 10)  # New subscriber
+        
+        # Publishers
+        self.goal_publisher = self.create_publisher(PoseStamped, '/smart_cane_goal', 10)
+        self.path_publisher = self.create_publisher(Path, '/smart_cane_path', 10)
+    
+        # Variables
         self.occupancy_grid = None
-        self.resolution = 0.025 # Assuming 5 cm per cell
+        self.resolution = 0.025  # Assuming 5 cm per cell
         self.width = 500  # Grid width
         self.height = 500  # Grid height
         self.origin_x = -5.0  # Map origin (meters)
         self.origin_y = -5.0
         self.costmap = None
-        self.global_goal = (15.0, 15.0)  # Global goal outside the known map
-        
+        self.global_goal = (1.0, 0.0)  # Default goal (updated via waypoint)
+        self.current_pose = None  # Stores the latest robot pose
+
+    def pose_callback(self, msg):
+        """Updates the current robot pose for path planning."""
+        self.current_pose = msg
+        self.try_planning()
+
     def map_callback(self, msg):
         self.occupancy_grid = np.array(msg.data).reshape((msg.info.height, msg.info.width))
         self.resolution = msg.info.resolution
@@ -29,15 +42,24 @@ class CustomNavigation(Node):
         self.height = msg.info.height
         self.origin_x = msg.info.origin.position.x
         self.origin_y = msg.info.origin.position.y
-        
         self.try_planning()
-        
+
+    def waypoint_callback(self, msg):
+        self.global_goal = (msg.pose.position.x, msg.pose.position.y)
+        self.get_logger().info(f"Updated global goal to: {self.global_goal}")
+        self.try_planning()   
+
     def costmap_callback(self, msg):
         self.costmap = np.array(msg.data).reshape((msg.info.height, msg.info.width))
         self.try_planning()
 
     def try_planning(self):
-        if self.occupancy_grid is None or self.costmap is None:
+        """Attempts path planning if all required data is available."""
+        if (
+            self.occupancy_grid is None 
+            or self.costmap is None 
+            or self.current_pose is None
+        ):
             return
 
         frontiers = self.detect_frontiers()
@@ -83,7 +105,11 @@ class CustomNavigation(Node):
         return gx, gy
     
     def plan_path(self, target_frontier):
-        start = self.global_to_grid((0.0, 0.0))  # Assume robot starts at (0,0)
+        """Plans path from current pose to target frontier."""
+        start_x = self.current_pose.pose.position.x
+        start_y = self.current_pose.pose.position.y
+        start = self.global_to_grid((start_x, start_y))  # Dynamic start position
+        
         path = self.d_lite(start, target_frontier)
         
         if path:
@@ -140,7 +166,6 @@ class CustomNavigation(Node):
         path.reverse()
         return path
 
-    
     def publish_goal(self, goal):
         goal_msg = PoseStamped()
         goal_msg.header.frame_id = "map"
@@ -167,7 +192,6 @@ class CustomNavigation(Node):
         
         self.path_publisher.publish(path_msg)
         self.get_logger().info("Published path")
-
 
 def main():
     rclpy.init()

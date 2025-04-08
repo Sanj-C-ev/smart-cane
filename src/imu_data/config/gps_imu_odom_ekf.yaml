@@ -1,0 +1,35 @@
+# ekf.yaml
+ekf_global_node:
+  ros__parameters:
+    frequency: 30.0
+    two_d_mode: false          # 3D mode (set true if 2D)
+    odom_frame: odom
+    base_link_frame: base_link
+    world_frame: odom          # Fuse in odom frame
+
+    # Input 1: rf2o LiDAR Odometry (position + velocity)
+    odom0: /odom_rf2o
+    odom0_config: [true,  true,  true,   # X, Y, Z position
+                  false, false, false,   # Ignore orientation (IMU handles this)
+                  true,  true,  true,    # X, Y, Z velocity
+                  false, false, false,   # Ignore angular velocity
+                  false, false, false]
+
+    # Input 2: IMU (orientation + angular velocity)
+    imu0: /imu/data
+    imu0_config: [false, false, false,   # Disable position
+                  true,  true,  true,    # Use Roll, Pitch, Yaw
+                  false, false, false,  
+                  true,  true,  true,    # Angular velocity
+                  true,  true,  true]    # Linear acceleration
+
+    # Input 3: GPS (position only)
+    pose0: /odometry/gps       # From navsat_transform_node
+    pose0_config: [true,  true,  true,  # X, Y, Z position
+                  false, false, false,   # Ignore orientation
+                  false, false, false,
+                  false, false, false]
+
+    # Tuning: Trust IMU for rotation, GPS for position
+    imu0_differential: false
+    pose0_nodelay: true
