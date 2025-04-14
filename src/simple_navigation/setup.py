@@ -1,5 +1,6 @@
 from setuptools import find_packages, setup
-
+import os
+from glob import glob
 package_name = 'simple_navigation'
 
 setup(
@@ -10,6 +11,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+    (os.path.join('share',package_name,'launch'), glob('launch/*.py')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -22,7 +24,8 @@ setup(
         'console_scripts': [
             'controller = simple_navigation.controller:main',
             'driver = simple_navigation.feedback_driver:main',
-            'obstacle_avoidance = simple_navigation.ultrasonic_haptic:main',
+            'ultrasonic_obstacle = simple_navigation.ultrasonic_haptic:main',
+            'lidar_us_obstacles = simple_navigation.lidar_ultrasonic_haptic:main',            
 
         ],
     },

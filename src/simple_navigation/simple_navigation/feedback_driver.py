@@ -7,6 +7,7 @@ import requests
 import serial
 import time
 
+
 class HapticBridgeNode(Node):
     def __init__(self):
         super().__init__('haptic_bridge_node')
@@ -35,12 +36,12 @@ class HapticBridgeNode(Node):
         self.serial_connection = None
         
         # Initialize subscribers with QoS profiles
-        self.haptic_sub = self.create_subscription(
-            String, 
-            '/haptic_feedback', 
-            self.haptic_callback, 
-            rclpy.qos.qos_profile_sensor_data
+        qos_profile = rclpy.qos.QoSProfile(
+            reliability=rclpy.qos.ReliabilityPolicy.RELIABLE,
+            durability=rclpy.qos.DurabilityPolicy.VOLATILE,
+            depth=10
         )
+        self.haptic_sub = self.create_subscription(String, '/haptic_feedback', self.haptic_callback, qos_profile)
         
         self.kinesthetic_sub = self.create_subscription(
             String,

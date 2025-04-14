@@ -1,95 +1,306 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import Float32MultiArray, Int8MultiArray, String
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import Int8MultiArray
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Wedge, Circle
+import math
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 
-class DirectionalObstacleDetector(Node):
+class MultiSensorObstacleVisualizer(Node):
     def __init__(self):
-        super().__init__('directional_obstacle_detector')
+        super().__init__('multi_sensor_obstacle_visualizer')
+        ultrasonic_qos = QoSProfile(
+            depth=10,
+            reliability=QoSReliabilityPolicy.BEST_EFFORT
+        )
         
-        # Configure sectors with individual thresholds (meters)
-        # Format: (name, center_angle_rad, width_rad, threshold_m)
-        self.sectors = [
-            ('left', np.pi/3, np.pi/6, 0.5),       # 60° left, 30° width, 0.5m threshold
-            ('left_near', np.pi/6, np.pi/6, 0.75),   # 30° left, 1.0m threshold
-            ('front', 0, np.pi/6, 1.2),             # Center, 2.0m threshold
-            ('right_near', -np.pi/6, np.pi/6, 0.75), # 30° right, 1.0m threshold
-            ('right', -np.pi/3, np.pi/6, 0.5)       # 60° right, 0.5m threshold
+        # Sensor configuration
+        self.front_cluster_offset = 0.5  # 50cm ahead of the rear sensor
+        self.rear_sensor_offset = -0.5   # 50cm behind the front cluster
+        self.min_threshold = 0.2  # Minimum valid distance
+        self.max_lidar_range = 3.0  # Maximum range for m-value mapping
+        
+        # Ultrasonic sensor angles (45° left, 0° front, 45° right)
+        self.us_angles = [math.pi/4, 0, -math.pi/4]
+        self.rear_us_angle = 0  # Also facing forward
+        
+        # LIDAR sector configuration (5 sectors covering 180° front)
+        self.lidar_sectors = [
+            ('left', math.pi/2, math.pi/4, 0.5, 'red'),       # 90°-45° left (a)
+            ('near_left', math.pi/4, math.pi/6, 0.5, 'orange'), # 45°-15° left (b)
+            ('front', 0, math.pi/6, self.max_lidar_range, 'green'), # 15° left to 15° right (c)
+            ('near_right', -math.pi/4, math.pi/6, 0.5, 'orange'), # 15°-45° right (d)
+            ('right', -math.pi/2, math.pi/4, 0.5, 'red')       # 45°-90° right (e)
         ]
         
-        # ROS 2 interface
-        self.subscription = self.create_subscription(
-            LaserScan,
-            '/scan',
-            self.scan_callback,
-            10
-        )
-        self.publisher = self.create_publisher(
-            Int8MultiArray,
-            '/haptic',
-            10
+        # Threshold distances (in meters)
+        self.us_cluster_threshold_front = 0.4  # Front ultrasonic
+        self.us_cluster_threshold_side = 0.3   # Side ultrasonics
+        self.rear_us_threshold = 0.8           # Rear ultrasonic
+        self.lidar_threshold = 0.5             # LIDAR threshold
+        
+        # ROS interfaces
+        self.lidar_sub = self.create_subscription(
+            LaserScan, '/scan', self.lidar_callback, 10)
+        self.ultrasonic_cluster_sub = self.create_subscription(
+            Float32MultiArray, '/sensors/ultrasonic_cluster_1', 
+            self.ultrasonic_cluster_callback, ultrasonic_qos)
+        self.rear_ultrasonic_sub = self.create_subscription(
+            Float32MultiArray, '/sensors/ultrasonic_cluster_2', 
+            self.rear_ultrasonic_callback, ultrasonic_qos)
+        
+        self.haptic_pub = self.create_publisher(Int8MultiArray, '/haptic', 10)
+        self.kinesthetic_pub = self.create_publisher(String, '/kinesthetic_feedback', 10)
+        
+        # Sensor data storage
+        self.lidar_data = None
+        self.ultrasonic_cluster_data = [float('inf')] * 3  # [left, front, right]
+        self.rear_ultrasonic_data = float('inf')
+        self.detection_result = [0] * 5  # For [a,b,c,d,e] feedback
+        self.front_obstacle_distance = self.max_lidar_range  # Track front obstacle distance
+        
+        # Visualization setup
+        plt.ion()
+        self.fig, self.ax = plt.subplots(subplot_kw={'projection': 'polar'})
+        self.setup_visualization()
+        
+        # Control timer
+        self.timer = self.create_timer(0.1, self.update_detection)
+
+    def setup_visualization(self):
+        """Initialize the visualization window"""
+        self.ax.clear()
+        self.ax.set_theta_offset(np.pi/2)  # 0° at top
+        self.ax.set_ylim(0, 2.0)  # Show up to 2 meters
+        self.ax.set_title("Multi-Sensor Obstacle Detection\n(Red=Obstacle)")
+        
+        # Create LIDAR sector visualizations
+        self.lidar_sector_artists = []
+        for name, center, width, threshold, color in self.lidar_sectors:
+            wedge = Wedge(
+                (0,0), threshold, 
+                np.degrees(center-width/2), 
+                np.degrees(center+width/2),
+                color=color, alpha=0.2
+            )
+            self.lidar_sector_artists.append(self.ax.add_patch(wedge))
+            self.ax.text(center, threshold*0.8, name, ha='center')
+        
+        # Ultrasonic positions and detection markers
+        self.us_markers = []
+        colors = ['red', 'green', 'blue', 'magenta']
+        for i in range(3):  # Front cluster sensors
+            marker, = self.ax.plot([], [], 'o', color=colors[i], markersize=10)
+            self.us_markers.append(marker)
+        
+        # Rear sensor marker (shown at its physical position but facing forward)
+        self.rear_marker, = self.ax.plot([math.pi], [0.5], 'o', color='magenta', markersize=12)
+        self.rear_beam, = self.ax.plot([0, 0], [0.5, 2.0], 'm--', alpha=0.5)
+        
+        # Detection indicators (5 circles for [a,b,c,d,e])
+        self.detection_artists = []
+        # Left sector indicators (a)
+        self.detection_artists.append(self.ax.add_patch(Circle((math.pi/2, 0.15), 0.05, color='red', alpha=0)))
+        # Near left indicator (b)
+        self.detection_artists.append(self.ax.add_patch(Circle((math.pi/4, 0.15), 0.05, color='orange', alpha=0)))
+        # Front indicator (c)
+        self.detection_artists.append(self.ax.add_patch(Circle((0, 0.2), 0.05, color='green', alpha=0)))
+        # Near right indicator (d)
+        self.detection_artists.append(self.ax.add_patch(Circle((-math.pi/4, 0.15), 0.05, color='orange', alpha=0)))
+        # Right indicator (e)
+        self.detection_artists.append(self.ax.add_patch(Circle((-math.pi/2, 0.15), 0.05, color='red', alpha=0)))
+        
+        # Add legend
+        self.ax.legend(
+            handles=[
+                plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=10, label='Left'),
+                plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markersize=10, label='Near Left/Right'),
+                plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='green', markersize=10, label='Front'),
+                plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='blue', markersize=10, label='Ultrasonic'),
+                plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='magenta', markersize=10, label='Rear US')
+            ],
+            loc='upper right'
         )
         
-        self.get_logger().info("Obstacle detector ready with sector thresholds:")
-        for name, _, _, thresh in self.sectors:
-            self.get_logger().info(f"  {name}: {thresh}m")
+        self.fig.tight_layout()
+        self.fig.canvas.draw()
 
-    def scan_callback(self, msg):
-        """Process LIDAR data and publish obstacle presence"""
+    def lidar_callback(self, msg):
+        """Store LIDAR data"""
+        self.lidar_data = msg
+
+    def ultrasonic_cluster_callback(self, msg):
+        """Store ultrasonic cluster data [left, front, right]"""
+        if len(msg.data) == 3:
+            self.ultrasonic_cluster_data = msg.data
+
+    def rear_ultrasonic_callback(self, msg):
+        """Store rear ultrasonic sensor data"""
+        if len(msg.data) == 1:
+            self.rear_ultrasonic_data = msg.data[0]
+
+    def process_lidar_data(self):
+        """Process LIDAR data to detect obstacles in 5 sectors and return distance info"""
+        if self.lidar_data is None:
+            return [0] * 5, self.max_lidar_range
+        
+        feedback = [0] * 5
+        angles = np.linspace(
+            self.lidar_data.angle_min,
+            self.lidar_data.angle_max,
+            len(self.lidar_data.ranges))
+        
+        ranges = np.array(self.lidar_data.ranges)
+        front_distances = []
+        
+        for i, (_, center, width, threshold, _) in enumerate(self.lidar_sectors):
+            start_angle = center - width/2
+            end_angle = center + width/2
+            
+            # Handle angle wrapping
+            if start_angle < -np.pi:
+                start_angle += 2*np.pi
+            if end_angle > np.pi:
+                end_angle -= 2*np.pi
+                
+            if start_angle > end_angle:
+                mask = (angles >= start_angle) | (angles <= end_angle)
+            else:
+                mask = (angles >= start_angle) & (angles <= end_angle)
+            
+            sector_ranges = ranges[mask]
+            valid_ranges = sector_ranges[
+                (sector_ranges > self.min_threshold) & 
+                (sector_ranges <= threshold) & 
+                ~np.isinf(sector_ranges)
+            ]
+            
+            if valid_ranges.size > 0:
+                feedback[i] = 1
+                if i == 2:  # Front sector
+                    front_distances.extend(valid_ranges.tolist())
+        
+        # Calculate closest front obstacle distance
+        front_distance = min(front_distances) if front_distances else self.max_lidar_range
+        return feedback, front_distance
+
+    def process_ultrasonic_data(self):
+        """Process ultrasonic data to detect obstacles"""
+        feedback = [0] * 5
+        us_left, us_front, us_right = self.ultrasonic_cluster_data
+        rear_us = self.rear_ultrasonic_data
+        
+        # Map ultrasonic to LIDAR sectors
+        # Left ultrasonic affects left and near-left sectors (a,b)
+        if self.min_threshold <= us_left <= self.us_cluster_threshold_side:
+            feedback[0] = 1  # left
+            feedback[1] = 1  # near-left
+            
+        # Front ultrasonic affects front sector (c)
+        if self.min_threshold <= us_front <= self.us_cluster_threshold_front:
+            feedback[2] = 1  # front
+            self.front_obstacle_distance = min(self.front_obstacle_distance, us_front)
+            
+        # Right ultrasonic affects right and near-right sectors (d,e)
+        if self.min_threshold <= us_right <= self.us_cluster_threshold_side:
+            feedback[3] = 1  # near-right
+            feedback[4] = 1  # right
+            
+        # Rear ultrasonic affects front sector (c)
+        if self.min_threshold <= rear_us <= self.rear_us_threshold:
+            feedback[2] = 1  # front
+            self.front_obstacle_distance = min(self.front_obstacle_distance, rear_us)
+            
+        return feedback
+
+    def generate_kinesthetic_feedback(self, combined_feedback, front_distance):
+        """Generate kinesthetic feedback string based on obstacle detection"""
+        # Determine steering value (s)
+        if combined_feedback[2] == 0:  # Front clear
+            s_value = 90
+        else:
+            left_blocked = combined_feedback[0] or combined_feedback[1]  # left or near-left
+            right_blocked = combined_feedback[3] or combined_feedback[4]  # right or near-right
+            
+            if left_blocked and not right_blocked:
+                s_value = 120  # Steer right
+            elif right_blocked and not left_blocked:
+                s_value = 60   # Steer left
+            else:
+                s_value = 60   # Default to left if both or neither blocked
+        
+        # Determine motor value (m)
+        if combined_feedback[2] and (combined_feedback[0] or combined_feedback[1])and (combined_feedback[3] or combined_feedback[4]):  # All directions blocked
+            m_value = 255
+        elif combined_feedback[2] == 0:  # Front clear
+            m_value = 0
+        else:
+            # Linear interpolation from 0 at max_lidar_range (3m) to 200 at lidar_threshold (0.5m)
+            m_value = int(
+                200 * (self.max_lidar_range - front_distance) / 
+                (self.max_lidar_range - self.lidar_threshold)
+            )
+            m_value = max(0, min(200, m_value))
+        
+        return f"s:{s_value},m:{m_value}"
+
+    def update_detection(self):
+        """Combine sensor data and update visualization"""
         try:
-            # Initialize feedback array [left, left_near, front, right_near, right]
-            feedback = [0] * 5
+            # Process both sensor types
+            lidar_feedback, front_distance = self.process_lidar_data()
+            ultrasonic_feedback = self.process_ultrasonic_data()
             
-            # Convert scan to numpy arrays
-            angles = np.linspace(msg.angle_min, msg.angle_max, len(msg.ranges))
-            ranges = np.array(msg.ranges)
+            # Combine detections (logical OR)
+            combined_feedback = [int(l or u) for l, u in zip(lidar_feedback, ultrasonic_feedback)]
             
-            # Check each sector
-            for i, (_, center, width, threshold) in enumerate(self.sectors):
-                # Get sector boundaries (handling angle wrapping)
-                start_angle = center - width/2
-                end_angle = center + width/2
-                
-                if start_angle < msg.angle_min:
-                    start_angle += 2*np.pi
-                    end_angle += 2*np.pi
-                
-                # Create mask for this sector
-                if start_angle > end_angle:
-                    mask = (angles >= start_angle) | (angles <= end_angle)
-                else:
-                    mask = (angles >= start_angle) & (angles <= end_angle)
-                
-                # Check for obstacles within threshold
-                sector_ranges = ranges[mask]
-                valid_ranges = sector_ranges[
-                    (sector_ranges > 0.1) &  # Ignore very close readings
-                    (sector_ranges <= threshold) & 
-                    ~np.isinf(sector_ranges)
-                ]
-                
-                if valid_ranges.size > 0:
-                    feedback[i] = 1
+            # Update front obstacle distance
+            self.front_obstacle_distance = min(front_distance, self.front_obstacle_distance)
             
-            # Publish result
+            # Generate kinesthetic feedback
+            kinesthetic_msg = self.generate_kinesthetic_feedback(combined_feedback, self.front_obstacle_distance)
+            self.kinesthetic_pub.publish(String(data=kinesthetic_msg))
+            
+            # Update sensor positions in visualization
+            for i, angle in enumerate(self.us_angles):
+                distance = min(self.ultrasonic_cluster_data[i], 2.0)
+                self.us_markers[i].set_data([angle], [distance])
+            
+            # Update rear sensor visualization
+            self.rear_beam.set_data([0, 0], [0.5, min(self.rear_ultrasonic_data, 2.0)])
+            
+            # Update detection visualization
+            for i, artist in enumerate(self.detection_artists):
+                artist.set_alpha(combined_feedback[i] * 0.8)
+            
+            # Publish haptic feedback
             feedback_msg = Int8MultiArray()
-            feedback_msg.data = feedback
-            self.publisher.publish(feedback_msg)
+            feedback_msg.data = combined_feedback
+            self.haptic_pub.publish(feedback_msg)
+            self.detection_result = combined_feedback
             
-            self.get_logger().debug(f"Published feedback: {feedback}")
+            # Reset front obstacle distance if no current detection
+            if combined_feedback[2] == 0:
+                self.front_obstacle_distance = self.max_lidar_range
+            
+            # Update plot
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
             
         except Exception as e:
-            self.get_logger().error(f"Scan processing error: {str(e)}")
+            self.get_logger().error(f"Detection error: {str(e)}")
 
 def main(args=None):
     rclpy.init(args=args)
-    node = DirectionalObstacleDetector()
+    node = MultiSensorObstacleVisualizer()
     
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
+        plt.close('all')
         node.get_logger().info("Shutting down...")
     finally:
         node.destroy_node()

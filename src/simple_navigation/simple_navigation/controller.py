@@ -79,19 +79,19 @@ class HapticFeedbackController(Node):
         feedback_msg = String()
         feedback_msg.data = motor_cmd
         self.pending_haptic_msg = feedback_msg
-
+        s = 90
         # Steering logic based on obstacles
         if front == 0:
             s = 90
         else:
             if near_left == 1 and near_right == 1:
-                s = 60
-            elif left == 1 and right == 1:
-                s = 60
-            elif near_left == 1 or left == 1:
                 s = 120
-            elif near_right == 1 or right == 1:
+            elif left == 1 and right == 1:
+                s = 120
+            elif near_left == 1 or left == 1:
                 s = 60
+            elif near_right == 1 or right == 1:
+                s = 120
 
         # Update kinesthetic feedback if obstacle requires steering change
         command_str = f"s:{s},m:{self.map_linear_to_motor(0)}"  # Stop motor when obstacle detected
