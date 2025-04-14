@@ -26,7 +26,7 @@ class ESP32SensorNode(Node):
         self.declare_parameters(
             namespace='',
             parameters=[
-                ('serial_port', '/dev/ttyUSB0'),
+                ('serial_port', '/dev/ttyUSB1'),
                 ('baud_rate', 115200),
                 ('max_retries', 5),
                 ('retry_delay', 1.0),

@@ -25,8 +25,10 @@ setup(
             'mapping_fused = mapping_navigation.mapping_fused:main',
             'slam_node_2 = mapping_navigation.mapping:main',
             'slam_node = mapping_navigation.mapping_costmap:main',
+            'slam_node_3 = mapping_navigation.mapping_costmap_non_updating:main', 
             'goal_publisher = mapping_navigation.goal_publish:main',
             'path_planner = mapping_navigation.navigation_frontier_dlite:main',
+            'path_planner_2 = mapping_navigation.maze_solving_navigation:main',
             'local_planner=mapping_navigation.local_planner_pure_pursuit:main',
             'feedback_driver=mapping_navigation.feedback_driver:main',
             'controller = mapping_navigation.controller:main'

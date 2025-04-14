@@ -10,7 +10,8 @@ import tf2_ros
 import matplotlib.pyplot as plt
 import scipy.ndimage
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy
-
+import os
+import datetime
 
 class MultiSensorSlam(Node):
     def __init__(self):
@@ -44,7 +45,7 @@ class MultiSensorSlam(Node):
 
         self.occupancy_grid_publisher = self.create_publisher(OccupancyGrid, '/occupancy_grid', 10)
         self.local_costmap_publisher = self.create_publisher(OccupancyGrid, '/local_costmap', 10)
-        self.pose_publisher = self.create_publisher(PoseStamped, '/robot_pose', 10)
+        self.pose_publisher = self.create_publisher(PoseStamped, '/smart_cane_pose', 10)
 
         plt.ion()
         self.fig, self.ax = plt.subplots(figsize=(6, 6))
@@ -170,7 +171,7 @@ class MultiSensorSlam(Node):
         lidar_prob = 1 / (1 + np.exp(-self.lidar_log_grid))
         fused_prob = np.maximum(ultrasonic_binary, lidar_prob)
         self.occupancy_grid = fused_prob * 100
-        self.render_map(fused_prob)
+        #self.render_map(fused_prob)
 
     
 
@@ -183,8 +184,8 @@ class MultiSensorSlam(Node):
         self.center_x = self.x
         self.center_y = self.y
         self.occupancy_grid = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
-        self.ultrasonic_log_grid.fill(0)
-        self.lidar_log_grid.fill(0)
+        #self.ultrasonic_log_grid.fill(0)
+        #self.lidar_log_grid.fill(0)
 
     def publish_occupancy_grid(self):
         grid_msg = OccupancyGrid()
@@ -242,15 +243,45 @@ class MultiSensorSlam(Node):
         self.ax.plot(gx, gy, marker='x', color='r')
         plt.draw()
         plt.pause(0.001)
+    
+    def save_maps(self, base_folder_path='/home/sanj_19/maps'):
+        # Generate a timestamp to create a unique folder name
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        folder_path = os.path.join(base_folder_path, timestamp)
+
+        # Create the directory for the timestamped folder
+        os.makedirs(folder_path, exist_ok=True)
+
+        # Convert log-odds to probability
+        ultrasonic_prob = 1 / (1 + np.exp(-self.ultrasonic_log_grid))
+        lidar_prob = 1 / (1 + np.exp(-self.lidar_log_grid))
+        fused_prob = self.occupancy_grid  # Already probability format
+
+        # Normalize to 0–100 int8 format (like ROS costmaps)
+        ultrasonic_int = (ultrasonic_prob * 100).astype(np.uint8)
+        lidar_int = (lidar_prob * 100).astype(np.uint8)
+        fused_int = (fused_prob * 100).astype(np.uint8)
+
+        # Save as .npy and .csv
+        np.save(os.path.join(folder_path, 'ultrasonic_map.npy'), ultrasonic_int)
+        np.save(os.path.join(folder_path, 'lidar_map.npy'), lidar_int)
+        np.save(os.path.join(folder_path, 'fused_map.npy'), fused_int)
+
+        np.savetxt(os.path.join(folder_path, 'ultrasonic_map.csv'), ultrasonic_int, fmt='%d', delimiter=",")
+        np.savetxt(os.path.join(folder_path, 'lidar_map.csv'), lidar_int, fmt='%d', delimiter=",")
+        np.savetxt(os.path.join(folder_path, 'fused_map.csv'), fused_int, fmt='%d', delimiter=",")
+
+        self.get_logger().info(f"Maps saved to folder: {folder_path}")
 
 
-def main(args=None):
-    rclpy.init(args=args)
-    slam_node = MultiSensorSlam()
-    rclpy.spin(slam_node)
-    slam_node.destroy_node()
-    rclpy.shutdown()
 
-
-if __name__ == '__main__':
-    main()
+def main():
+    rclpy.init()
+    node = MultiSensorSlam()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.save_maps()
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()

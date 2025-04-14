@@ -14,10 +14,10 @@ class HapticFeedbackController(Node):
         self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
         
         # Parameters
-        self.declare_parameter('max_linear_vel', 0.5)  # m/s
-        self.declare_parameter('max_angular_vel', 1.0)  # rad/s
-        self.declare_parameter('min_angle', 60)  # degrees
-        self.declare_parameter('max_angle', 120)  # degrees
+        self.declare_parameter('max_linear_vel', 1.0)  # m/s
+        self.declare_parameter('max_angular_vel',0.5)  # rad/s
+        self.declare_parameter('min_angle', 30)  # degrees
+        self.declare_parameter('max_angle', 150)  # degrees
         
         # Get parameters
         self.max_linear_vel = self.get_parameter('max_linear_vel').value

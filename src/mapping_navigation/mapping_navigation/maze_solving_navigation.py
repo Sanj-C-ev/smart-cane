@@ -4,8 +4,8 @@ import numpy as np
 from nav_msgs.msg import OccupancyGrid, Path
 from geometry_msgs.msg import PoseStamped
 from queue import PriorityQueue
-import os
-import datetime
+import tf_transformations as tf
+
 
 class CustomNavigation(Node):
     def __init__(self):
@@ -31,8 +31,6 @@ class CustomNavigation(Node):
         self.costmap = None
         self.global_goal = (1.0, 0.0)  # Default goal (updated via waypoint)
         self.current_pose = None  # Stores the latest robot pose
-        self.final_path = None
-
 
     def pose_callback(self, msg):
         """Updates the current robot pose for path planning."""
@@ -66,62 +64,51 @@ class CustomNavigation(Node):
         ):
             return
 
-        frontiers = self.detect_frontiers()
-        if not frontiers:
-            self.get_logger().info("No frontiers detected.")
-            return
+        # Search for path to the goal in front of the robot
+        if not self.find_path_in_front():
+            self.get_logger().info("No valid path in front, attempting to rotate and search.")
+            # If no path found, rotate and check the new direction (90, 180, 270 degrees)
+            if not self.rotate_and_find_path(90):
+                if not self.rotate_and_find_path(180):
+                    if not self.rotate_and_find_path(270):
+                        self.get_logger().info("No path found after 3 rotations.")
+                        return  # No path found after trying all directions
 
-        target = self.select_closest_frontier(frontiers)
-        self.plan_path(target)
-
-    def detect_frontiers(self):
-        frontiers = []
-        for y in range(self.height):
-            for x in range(self.width):
-                if self.occupancy_grid[y, x] == 0:  # Free cell
-                    if self.is_frontier(x, y):
-                        frontiers.append((x, y))
-        return frontiers
-    
-    def is_frontier(self, x, y):
-        for dx in [-1, 0, 1]:
-            for dy in [-1, 0, 1]:
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < self.width and 0 <= ny < self.height:
-                    if self.occupancy_grid[ny, nx] > 50:  # Unknown or obstacle
-                        return True
+    def find_path_in_front(self):
+        """Search for a goal within a 1-1.5m square region in front of the robot."""
+        goal_x_range = (1.0, 1.5)
+        goal_y_range = (-0.25, 0.25)
+        
+        for goal_x in np.linspace(goal_x_range[0], goal_x_range[1], num=5):  # Sample goals along x direction
+            for goal_y in np.linspace(goal_y_range[0], goal_y_range[1], num=5):  # Sample goals along y direction
+                goal = (goal_x, goal_y)
+                self.get_logger().info(f"Searching for path to goal: {goal}")
+                if self.plan_path(goal):
+                    return True
         return False
-    
-    def select_closest_frontier(self, frontiers):
-        goal_x, goal_y = self.global_to_grid(self.global_goal)
-        return min(frontiers, key=lambda f: np.hypot(f[0] - goal_x, f[1] - goal_y))
-    
-    def global_to_grid(self, pos):
-        gx, gy = pos
-        x = int((gx - self.origin_x) / self.resolution)
-        y = int((gy - self.origin_y) / self.resolution)
-        return x, y
-    
-    def grid_to_global(self, grid_pos):
-        x, y = grid_pos
-        gx = x * self.resolution + self.origin_x
-        gy = y * self.resolution + self.origin_y
-        return gx, gy
-    
-    def plan_path(self, target_frontier):
-        """Plans path from current pose to target frontier."""
+
+    def rotate_and_find_path(self, angle):
+        """Rotate the robot by the given angle and search for a path."""
+        self.get_logger().info(f"Rotating by {angle} degrees and searching for a path.")
+        # Rotate robot by `angle` degrees (convert to radians)
+        self.current_pose.pose.orientation = tf.transformations.quaternion_from_euler(0, 0, np.radians(angle))
+        return self.find_path_in_front()
+
+    def plan_path(self, target_goal):
+        """Plans path from current pose to the target goal."""
         start_x = self.current_pose.pose.position.x
         start_y = self.current_pose.pose.position.y
         start = self.global_to_grid((start_x, start_y))  # Dynamic start position
         
-        path = self.d_lite(start, target_frontier)
+        goal = self.global_to_grid(target_goal)
+        path = self.d_lite(start, goal)
         
         if path:
             self.publish_path(path)
-            final_goal = self.grid_to_global(path[-1])
-            self.publish_goal(final_goal)
-            self.save_path(path)
-    
+            self.publish_goal(target_goal)
+            return True
+        return False
+
     def d_lite(self, start, goal):
         frontier = PriorityQueue()
         frontier.put((0, start))
@@ -137,7 +124,6 @@ class CustomNavigation(Node):
                 nx, ny = current[0] + dx, current[1] + dy
 
                 if 0 <= nx < self.width and 0 <= ny < self.height:
-                    # Get occupancy and inflation cost
                     occ = self.occupancy_grid[ny, nx]
                     inflation = self.costmap[ny, nx]
 
@@ -147,12 +133,11 @@ class CustomNavigation(Node):
 
                     # Optional: discourage moving into unknown space
                     if occ == -1:
-                        continue  # or use: inflation += 50
+                        continue
 
-                    # Normalize inflation to a cost factor
                     inflation_cost = inflation / 100.0
 
-                    move_cost = 1 + inflation_cost  # Base cost + inflation penalty
+                    move_cost = 1 + inflation_cost
                     new_cost = cost_so_far[current] + move_cost
 
                     next_cell = (nx, ny)
@@ -171,6 +156,18 @@ class CustomNavigation(Node):
         path.reverse()
         return path
 
+    def global_to_grid(self, pos):
+        gx, gy = pos
+        x = int((gx - self.origin_x) / self.resolution)
+        y = int((gy - self.origin_y) / self.resolution)
+        return x, y
+    
+    def grid_to_global(self, grid_pos):
+        x, y = grid_pos
+        gx = x * self.resolution + self.origin_x
+        gy = y * self.resolution + self.origin_y
+        return gx, gy
+    
     def publish_goal(self, goal):
         goal_msg = PoseStamped()
         goal_msg.header.frame_id = "map"
@@ -197,33 +194,13 @@ class CustomNavigation(Node):
         
         self.path_publisher.publish(path_msg)
         self.get_logger().info("Published path")
-    def save_path_to_file(self):
-        if not self.final_path:
-            self.get_logger().warn("No final path to save.")
-            return
-        
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_dir = os.path.expanduser("~/navigation_paths")
-        os.makedirs(save_dir, exist_ok=True)
-        filename = os.path.join(save_dir, f"final_path_{timestamp}.csv")
-
-        with open(filename, 'w') as f:
-            f.write("x,y\n")
-            for grid_pos in self.final_path:
-                gx, gy = self.grid_to_global(grid_pos)
-                f.write(f"{gx},{gy}\n")
-
-        self.get_logger().info(f"Final path saved to: {filename}")
-
 
 def main():
     rclpy.init()
     node = CustomNavigation()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        node.get_logger().info("Shutting down...")
-        node.save_path_to_file()
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
