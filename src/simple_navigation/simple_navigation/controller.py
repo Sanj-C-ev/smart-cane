@@ -70,10 +70,10 @@ class HapticFeedbackController(Node):
         left, near_left, front, near_right, right = msg.data
 
         # Set intensities based on obstacle presence
-        m1 = 255 if front == 1 else 0
-        m2 = 255 if front == 1 else 0
-        m3 = 255 if left == 1 or near_left == 1 else 0
-        m4 = 255 if right == 1 or near_right == 1 else 0
+        m1 = 200 if front == 1 else 0
+        m2 = 200 if front == 1 else 0
+        m3 = 200 if left == 1 or near_left == 1 else 0
+        m4 = 200 if right == 1 or near_right == 1 else 0
 
         motor_cmd = f"M1={m1}&M2={m2}&M3={m3}&M4={m4}"
         feedback_msg = String()
@@ -84,13 +84,9 @@ class HapticFeedbackController(Node):
         if front == 0:
             s = 90
         else:
-            if near_left == 1 and near_right == 1:
-                s = 120
-            elif left == 1 and right == 1:
-                s = 120
-            elif near_left == 1 or left == 1:
+            if near_left == 1 and left == 1:
                 s = 60
-            elif near_right == 1 or right == 1:
+            elif left == 1 and right == 1:
                 s = 120
 
         # Update kinesthetic feedback if obstacle requires steering change
