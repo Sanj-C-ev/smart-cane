@@ -42,8 +42,8 @@ def generate_launch_description():
 
     feedback_driver = Node(
         package='simple_navigation',
-        executable='driver',
-        name='driver',
+        executable='kinesthetic_driver',
+        name='kinesthetic_driver',
         output='screen',
         parameters=[{
             'use_sim_time': False,

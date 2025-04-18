@@ -55,8 +55,8 @@ def generate_launch_description():
 
     path_planning = Node(
         package='mapping_navigation',
-        executable='path_planner_2',
-        name='path_planner_2',
+        executable='path_planner_3',
+        name='path_planner_3',
         output='screen',
         parameters=[{
             'use_sim_time': False,

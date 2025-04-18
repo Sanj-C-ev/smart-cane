@@ -29,11 +29,14 @@ class SimpleObstacleDetector(Node):
         
         # Sensor data storage
         self.front_sensor_data = float('inf')
+        self.left_sensor_data = float('inf')
+        self.right_sensor_data = float('inf')
         self.rear_sensor_data = float('inf')
 
     def ultrasonic_cluster_callback(self, msg):
         """Store front sensor data from cluster 1 (assuming index 1 is front)"""
         if len(msg.data) >= 2:  # Ensure we have at least 2 sensors (left, front)
+
             self.front_sensor_data = msg.data[1]  # Second element is front sensor
             self.detect_obstacles()
 
@@ -49,11 +52,11 @@ class SimpleObstacleDetector(Node):
         
         # Front sensor detection (cluster 1)
         if self.min_threshold <= self.front_sensor_data <= self.front_threshold:
-            feedback = [0, 0, 1, 1, 1]  # Pattern for front obstacle
+            feedback = [0, 0, 0, 1, 1]  # Pattern for front obstacle
         
         # Rear sensor detection (cluster 2)
         elif self.min_threshold <= self.rear_sensor_data <= self.rear_threshold:
-            feedback = [1, 1, 1, 0, 0]  # Pattern for rear obstacle
+            feedback = [1, 1, 0, 0, 0]  # Pattern for rear obstacle
         
         # Publish haptic feedback
         feedback_msg = Int8MultiArray()
@@ -61,6 +64,7 @@ class SimpleObstacleDetector(Node):
         self.haptic_pub.publish(feedback_msg)
         
         self.get_logger().info(f"Published feedback: {feedback}")
+    
 
 def main(args=None):
     rclpy.init(args=args)

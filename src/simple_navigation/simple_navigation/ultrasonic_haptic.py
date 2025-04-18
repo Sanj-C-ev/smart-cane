@@ -17,9 +17,9 @@ class UltrasonicObstacleVisualizer(Node):
         )
         
         # Sensor configuration
-        #self.front_cluster_offset = 0.5  # 45cm ahead of the rear sensor
-        #self.rear_sensor_offset = -0.5   # 45cm behind the front cluster
-        self.min_threshold = 0.05
+        self.front_cluster_offset = 0.5  # 45cm ahead of the rear sensor
+        self.rear_sensor_offset = -0.5   # 45cm behind the front cluster
+        self.min_threshold = 0.2
         
         # Ultrasonic sensor angles (45° left, 0° front, 45° right)
         self.us_angles = [math.pi/4, 0, -math.pi/4]

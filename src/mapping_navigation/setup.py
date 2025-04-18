@@ -29,6 +29,7 @@ setup(
             'goal_publisher = mapping_navigation.goal_publish:main',
             'path_planner = mapping_navigation.navigation_frontier_dlite:main',
             'path_planner_2 = mapping_navigation.maze_solving_navigation:main',
+            'path_planner_3 = mapping_navigation.navigation_multi_path:main',
             'local_planner=mapping_navigation.local_planner_pure_pursuit:main',
             'feedback_driver=mapping_navigation.feedback_driver:main',
             'controller = mapping_navigation.controller:main'

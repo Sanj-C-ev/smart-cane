@@ -24,6 +24,8 @@ setup(
         'console_scripts': [
             'controller = simple_navigation.controller:main',
             'driver = simple_navigation.feedback_driver:main',
+            'haptic_driver = simple_navigation.haptic_driver:main',
+            'kinesthetic_driver = simple_navigation.kinesthetic_driver:main',
             'ultrasonic_obstacle = simple_navigation.ultrasonic_haptic:main',
             'ultrasonic_2_sensors = simple_navigation.ultrasonic_haptic_kinesthetic:main ',
             'lidar_us_obstacles = simple_navigation.lidar_ultrasonic_haptic:main',            

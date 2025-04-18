@@ -4,8 +4,6 @@ import numpy as np
 from nav_msgs.msg import OccupancyGrid, Path
 from geometry_msgs.msg import PoseStamped
 from queue import PriorityQueue
-import os
-import datetime
 
 class CustomNavigation(Node):
     def __init__(self):
@@ -31,8 +29,6 @@ class CustomNavigation(Node):
         self.costmap = None
         self.global_goal = (1.0, 0.0)  # Default goal (updated via waypoint)
         self.current_pose = None  # Stores the latest robot pose
-        self.final_path = None
-
 
     def pose_callback(self, msg):
         """Updates the current robot pose for path planning."""
@@ -120,7 +116,6 @@ class CustomNavigation(Node):
             self.publish_path(path)
             final_goal = self.grid_to_global(path[-1])
             self.publish_goal(final_goal)
-            self.save_path(path)
     
     def d_lite(self, start, goal):
         frontier = PriorityQueue()
@@ -197,24 +192,6 @@ class CustomNavigation(Node):
         
         self.path_publisher.publish(path_msg)
         self.get_logger().info("Published path")
-    def save_path_to_file(self):
-        if not self.final_path:
-            self.get_logger().warn("No final path to save.")
-            return
-        
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_dir = os.path.expanduser("~/navigation_paths")
-        os.makedirs(save_dir, exist_ok=True)
-        filename = os.path.join(save_dir, f"final_path_{timestamp}.csv")
-
-        with open(filename, 'w') as f:
-            f.write("x,y\n")
-            for grid_pos in self.final_path:
-                gx, gy = self.grid_to_global(grid_pos)
-                f.write(f"{gx},{gy}\n")
-
-        self.get_logger().info(f"Final path saved to: {filename}")
-
 
 def main():
     rclpy.init()
@@ -223,7 +200,9 @@ def main():
         rclpy.spin(node)
     except KeyboardInterrupt:
         node.get_logger().info("Shutting down...")
-        node.save_path_to_file()
     finally:
         node.destroy_node()
         rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()

@@ -28,7 +28,7 @@ class HapticFeedbackController(Node):
         self.publish_rate = self.get_parameter('publish_rate').value
 
         # Publishers
-        self.kinesthetic_pub = self.create_publisher(String, '/kinesthetic_feedback', 10)
+        #self.kinesthetic_pub = self.create_publisher(String, '/kinesthetic_feedback', 10)
         self.haptic_pub = self.create_publisher(String, '/haptic_feedback', 10)
 
         # Rate control variables
@@ -40,6 +40,7 @@ class HapticFeedbackController(Node):
         self.timer = self.create_timer(1.0/self.publish_rate, self.publish_pending_messages)
 
         self.get_logger().info(f"Haptic Feedback Controller ready (publishing at {self.publish_rate}Hz)")
+        self.rate = self.create_rate(10)  # 10 Hz
 
     def cmd_vel_callback(self, msg):
         """Handle kinesthetic feedback from cmd_vel"""
@@ -60,6 +61,7 @@ class HapticFeedbackController(Node):
         feedback_msg = String()
         feedback_msg.data = command_str
         self.pending_kinesthetic_msg = feedback_msg
+        self.rate.sleep()  # This will ensure the loop runs at 10 Hz
 
     def haptic_obstacle_callback(self, msg):
         """Haptic motor feedback based on obstacle positions"""
@@ -94,14 +96,15 @@ class HapticFeedbackController(Node):
         steering_msg = String()
         steering_msg.data = command_str
         self.pending_kinesthetic_msg = steering_msg
-
+        self.rate.sleep()  # This will ensure the loop runs at 10 Hz
+        
     def publish_pending_messages(self):
         """Publish pending messages at the controlled rate"""
         current_time = self.get_clock().now()
         
-        if self.pending_kinesthetic_msg is not None:
-            self.kinesthetic_pub.publish(self.pending_kinesthetic_msg)
-            self.pending_kinesthetic_msg = None
+        #if self.pending_kinesthetic_msg is not None:
+         #   self.kinesthetic_pub.publish(self.pending_kinesthetic_msg)
+          #  self.pending_kinesthetic_msg = None
             
         if self.pending_haptic_msg is not None:
             self.haptic_pub.publish(self.pending_haptic_msg)
