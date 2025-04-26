@@ -6,15 +6,15 @@ from ament_index_python.packages import get_package_share_directory
 import os
 
 def generate_launch_description():
-    rplidar_pkg = get_package_share_directory('rplidar_ros')
+    sllidar = get_package_share_directory('sllidar_ros2')
     #rf2o_pkg = get_package_share_directory('rf2o_laser_odometry')
     imu_data_pkg = get_package_share_directory('imu_data')
-    simple_navigation = get_package_share_directory('simple_navigation')
+    navigation = get_package_share_directory('navigation')
 
     # RPLIDAR launch
-    rplidar_launch = IncludeLaunchDescription(
+    sllidar_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(rplidar_pkg, 'launch', 'rplidar_a1_launch.py')
+            os.path.join(sllidar, 'launch', 'rplidar_a1_launch.py')
         )
     )
 
@@ -29,7 +29,7 @@ def generate_launch_description():
         }]
     )
     obstacle_avoiadance = Node(
-        package='simple_navigation',
+        package='navigation',
         executable='final_navigation',
         name='final_navigation',
         output='screen',
@@ -41,9 +41,9 @@ def generate_launch_description():
 
 
     feedback_driver = Node(
-        package='simple_navigation',
-        executable='haptic_driver',
-        name='haptic_driver',
+        package='navigation',
+        executable='kinesthetic_driver',
+        name='kinesthetic_driver',
         output='screen',
         parameters=[{
             'use_sim_time': False,
@@ -51,7 +51,7 @@ def generate_launch_description():
         }]
     )
     controller = Node(
-        package='simple_navigation',
+        package='navigation',
         executable='controller',
         name='controller',
         output='screen',
@@ -60,12 +60,10 @@ def generate_launch_description():
            
         }]
     )
-    
-    
-    
+      
 
     return LaunchDescription([
-        rplidar_launch,
+        sllidar_launch,
         sensor_data_node,
         obstacle_avoiadance,
         feedback_driver,

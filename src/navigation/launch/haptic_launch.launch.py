@@ -9,7 +9,7 @@ def generate_launch_description():
     rplidar_pkg = get_package_share_directory('rplidar_ros')
     #rf2o_pkg = get_package_share_directory('rf2o_laser_odometry')
     imu_data_pkg = get_package_share_directory('imu_data')
-    simple_navigation = get_package_share_directory('simple_navigation')
+    navigation = get_package_share_directory('navigation')
 
     # RPLIDAR launch
     rplidar_launch = IncludeLaunchDescription(
@@ -22,14 +22,13 @@ def generate_launch_description():
         package='imu_data',
         executable='sensor_data',
         name='sensor_data',
-        output='screen',
         parameters=[{
             'serial_port': '/dev/ttyUSB1',
             # Add other IMU parameters here if needed
         }]
     )
     obstacle_avoiadance = Node(
-        package='simple_navigation',
+        package='navigation',
         executable='final_navigation',
         name='final_navigation',
         output='screen',
@@ -41,7 +40,7 @@ def generate_launch_description():
 
 
     feedback_driver = Node(
-        package='simple_navigation',
+        package='navigation',
         executable='haptic_driver',
         name='haptic_driver',
         output='screen',
@@ -51,7 +50,7 @@ def generate_launch_description():
         }]
     )
     controller = Node(
-        package='simple_navigation',
+        package='navigation',
         executable='controller',
         name='controller',
         output='screen',

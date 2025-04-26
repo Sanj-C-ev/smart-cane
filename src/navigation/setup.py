@@ -1,7 +1,7 @@
 from setuptools import find_packages, setup
 import os
 from glob import glob
-package_name = 'simple_navigation'
+package_name = 'navigation'
 
 setup(
     name=package_name,
@@ -22,14 +22,10 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'controller = simple_navigation.controller:main',
-            'driver = simple_navigation.feedback_driver:main',
-            'haptic_driver = simple_navigation.haptic_driver:main',
-            'kinesthetic_driver = simple_navigation.kinesthetic_driver:main',
-            'ultrasonic_obstacle = simple_navigation.ultrasonic_haptic:main',
-            'lidar_us_obstacles = simple_navigation.lidar_ultrasonic_haptic:main',
-            'ultrasonic_2_sensors = simple_navigation.ultrasonic_haptic_kinesthetic:main ', 
-            'final_navigation = simple_navigation.combined_haptic_kinesthetic:main'           
+            'controller = navigation.controller:main',
+            'haptic_driver = navigation.haptic_driver:main',
+            'kinesthetic_driver = navigation.kinesthetic_driver:main',
+            'final_navigation = navigation.combined_haptic_kinesthetic:main'           
 
         ],
     },

@@ -30,8 +30,8 @@ def generate_launch_description():
     )
     obstacle_avoiadance = Node(
         package='simple_navigation',
-        executable='ultrasonic_2_sensors',
-        name='ultrasonic_2_sensors',
+        executable='final_navigation',
+        name='final_navigation',
         output='screen',
         parameters=[{
             'use_sim_time': False,
@@ -63,7 +63,7 @@ def generate_launch_description():
       
 
     return LaunchDescription([
-        rplidar_launch,
+        #rplidar_launch,
         sensor_data_node,
         obstacle_avoiadance,
         feedback_driver,
