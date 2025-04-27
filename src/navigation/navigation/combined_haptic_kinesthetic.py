@@ -91,7 +91,7 @@ class SmartCaneNavigator(Node):
         """Calculate haptic and kinesthetic feedback"""
         try:
             haptic = [0] * 5  # [hard_left, left, front, right, hard_right]
-            
+            haptic_fb = [0]*5
             # Check LIDAR sectors
             haptic[0] = self.check_sector_obstacle(*self.sectors[0][1:])  # hard_left
             haptic[1] = self.check_sector_obstacle(*self.sectors[1][1:])  # left
@@ -109,10 +109,7 @@ class SmartCaneNavigator(Node):
                 haptic[3] = 1
                 haptic[4] = 1
             
-            # Publish haptic feedback
-            msg = Int8MultiArray()
-            msg.data = haptic
-            self.haptic_pub.publish(msg)
+            
 
             # --- Kinesthetic Feedback Calculation ---
             s = 90  # Default straight
@@ -120,17 +117,21 @@ class SmartCaneNavigator(Node):
 
             if haptic[2] == 0:  # No obstacle ahead
                 s = 90
+                haptic_fb = [0,0,0,0,0]
             else:  # Obstacle ahead
                 left_free = (haptic[0] == 0 and haptic[1] == 0)
                 right_free = (haptic[3] == 0 and haptic[4] == 0)
                 
                 if right_free:
                     s = 85 
+                    haptic_fb = [1,1,0,0,0]
+
                 elif left_free:
                     s = 115
+                    haptic_fb = [0,0,0,1,1]
                 else:
                     s = 90  # No clear left or right, stay at 90 (front)
-
+                    haptic_fb = [1,1,1,1,1]
             # Calculate m based on front ultrasonic reading
             us_front = self.us_data[1]
             if 0.1<us_front <= 0.2:  # closer than 2 mm
@@ -140,6 +141,10 @@ class SmartCaneNavigator(Node):
                 m = min(max(m, 0), 200)
             else:
                 m = 0
+            # Publish haptic feedback
+            msg = Int8MultiArray()
+            msg.data = haptic_fb
+            self.haptic_pub.publish(msg)
 
             kinesthetic_msg = String()
             kinesthetic_msg.data = f's:{int(s)},m:{int(m)}'
