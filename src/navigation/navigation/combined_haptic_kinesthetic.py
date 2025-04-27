@@ -125,9 +125,9 @@ class SmartCaneNavigator(Node):
                 right_free = (haptic[3] == 0 and haptic[4] == 0)
                 
                 if right_free:
-                    s = 75 
+                    s = 85 
                 elif left_free:
-                    s = 105
+                    s = 115
                 else:
                     s = 90  # No clear left or right, stay at 90 (front)
 

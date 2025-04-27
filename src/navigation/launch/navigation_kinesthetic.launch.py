@@ -14,7 +14,7 @@ def generate_launch_description():
     # RPLIDAR launch
     sllidar_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(sllidar, 'launch', 'rplidar_a1_launch.py')
+            os.path.join(sllidar, 'launch', 'sllidar_a1_launch.py')
         )
     )
 
